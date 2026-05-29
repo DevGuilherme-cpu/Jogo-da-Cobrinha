@@ -74,7 +74,10 @@ AREA_Y2      = ALTURA  - ESPESSURA_PAREDE
 AREA_LARGURA = AREA_X2 - AREA_X1
 AREA_ALTURA  = AREA_Y2 - AREA_Y1
 
-tela    = pygame.display.set_mode((LARGURA, ALTURA))
+# TELA REAL (que pode ser esticada) e SUPERFÍCIE VIRTUAL (onde o jogo é desenhado)
+tela = pygame.display.set_mode((LARGURA, ALTURA), pygame.RESIZABLE)
+superficie_jogo = pygame.Surface((LARGURA, ALTURA)) # O jogo roda sempre em 640x480 aqui dentro
+
 relogio = pygame.time.Clock()
 pygame.display.set_caption("🐍 Cobrinha Supreme")
 
@@ -189,7 +192,7 @@ def atualizar_particulas():
         p["vy"]   += 0.15
         alpha = int(255 * p["vida"] / 20)
         r,g,b = p["cor"]
-        pygame.draw.circle(tela, (min(r,255),min(g,255),min(b,255)),
+        pygame.draw.circle(superficie_jogo, (min(r,255),min(g,255),min(b,255)),
                            (int(p["x"]), int(p["y"])), p["raio"])
         if p["vida"] <= 0:
             mortas.append(p)
@@ -199,36 +202,36 @@ def atualizar_particulas():
 #  RECORDES (em memória)
 recordes = {d: 0 for d in DIFICULDADES}
 
-#  FUNÇÕES AUXILIARES DE DESENHO
+#  FUNÇÕES AUXILIARES DE DESENHO (Trocando 'tela' por 'superficie_jogo')
 def desenhar_grade(tema):
     for x in range(AREA_X1, AREA_X2, TAMANHO_BLOCO):
-        pygame.draw.line(tela, tema["grade"], (x, AREA_Y1), (x, AREA_Y2))
+        pygame.draw.line(superficie_jogo, tema["grade"], (x, AREA_Y1), (x, AREA_Y2))
     for y in range(AREA_Y1, AREA_Y2, TAMANHO_BLOCO):
-        pygame.draw.line(tela, tema["grade"], (AREA_X1, y), (AREA_X2, y))
+        pygame.draw.line(superficie_jogo, tema["grade"], (AREA_X1, y), (AREA_X2, y))
 
 def desenhar_paredes(tema):
     EP = ESPESSURA_PAREDE
-    pygame.draw.rect(tela, tema["parede"], (0, 0, LARGURA, EP))
-    pygame.draw.rect(tela, tema["parede"], (0, ALTURA-EP, LARGURA, EP))
-    pygame.draw.rect(tela, tema["parede"], (0, 0, EP, ALTURA))
-    pygame.draw.rect(tela, tema["parede"], (LARGURA-EP, 0, EP, ALTURA))
-    pygame.draw.rect(tela, tema["parede_brilho"], (0, 0, LARGURA, EP), 2)
-    pygame.draw.rect(tela, tema["parede_brilho"], (0, ALTURA-EP, LARGURA, EP), 2)
-    pygame.draw.rect(tela, tema["parede_brilho"], (0, 0, EP, ALTURA), 2)
-    pygame.draw.rect(tela, tema["parede_brilho"], (LARGURA-EP, 0, EP, ALTURA), 2)
+    pygame.draw.rect(superficie_jogo, tema["parede"], (0, 0, LARGURA, EP))
+    pygame.draw.rect(superficie_jogo, tema["parede"], (0, ALTURA-EP, LARGURA, EP))
+    pygame.draw.rect(superficie_jogo, tema["parede"], (0, 0, EP, ALTURA))
+    pygame.draw.rect(superficie_jogo, tema["parede"], (LARGURA-EP, 0, EP, ALTURA))
+    pygame.draw.rect(superficie_jogo, tema["parede_brilho"], (0, 0, LARGURA, EP), 2)
+    pygame.draw.rect(superficie_jogo, tema["parede_brilho"], (0, ALTURA-EP, LARGURA, EP), 2)
+    pygame.draw.rect(superficie_jogo, tema["parede_brilho"], (0, 0, EP, ALTURA), 2)
+    pygame.draw.rect(superficie_jogo, tema["parede_brilho"], (LARGURA-EP, 0, EP, ALTURA), 2)
 
 def desenhar_obstaculos(obstaculos, tema):
     for ox, oy in obstaculos:
-        pygame.draw.rect(tela, tema["parede"], (ox, oy, TAMANHO_BLOCO, TAMANHO_BLOCO), border_radius=3)
-        pygame.draw.rect(tela, tema["parede_brilho"], (ox, oy, TAMANHO_BLOCO, TAMANHO_BLOCO), 2, border_radius=3)
+        pygame.draw.rect(superficie_jogo, tema["parede"], (ox, oy, TAMANHO_BLOCO, TAMANHO_BLOCO), border_radius=3)
+        pygame.draw.rect(superficie_jogo, tema["parede_brilho"], (ox, oy, TAMANHO_BLOCO, TAMANHO_BLOCO), 2, border_radius=3)
 
 def desenhar_segmento(x, y, tema):
     cx = x + TAMANHO_BLOCO // 2
     cy = y + TAMANHO_BLOCO // 2
     r  = TAMANHO_BLOCO // 2
-    pygame.draw.circle(tela, tema["cobra_sombra"], (cx, cy), r)
-    pygame.draw.circle(tela, tema["cobra"],        (cx, cy), r-2)
-    pygame.draw.circle(tela, tema["cobra_brilho"], (cx-2, cy-2), max(2, r//3))
+    pygame.draw.circle(superficie_jogo, tema["cobra_sombra"], (cx, cy), r)
+    pygame.draw.circle(superficie_jogo, tema["cobra"],        (cx, cy), r-2)
+    pygame.draw.circle(superficie_jogo, tema["cobra_brilho"], (cx-2, cy-2), max(2, r//3))
 
 def desenhar_cobra(lista_cobra, direcao, img_cabeca, tema):
     for bloco in lista_cobra[:-1]:
@@ -237,25 +240,32 @@ def desenhar_cobra(lista_cobra, direcao, img_cabeca, tema):
         cab = lista_cobra[-1]
         angulos = {"direita":0, "esquerda":180, "cima":270, "baixo":90}
         img_rot = pygame.transform.rotate(img_cabeca, angulos.get(direcao, 0))
-        tela.blit(img_rot, [cab[0], cab[1]])
+        superficie_jogo.blit(img_rot, [cab[0], cab[1]])
 
 def texto_centro(msg, cor, y, fonte=None):
     f = fonte or fonte_media
     s = f.render(msg, True, cor)
     r = s.get_rect(center=(LARGURA//2, y))
-    tela.blit(s, r)
+    superficie_jogo.blit(s, r)
 
 def caixa_opcao(rect, texto, selecionado, cor_sel, cor_text):
     cor_fundo = cor_sel if selecionado else (50, 50, 50)
     cor_borda = cor_sel if selecionado else (100, 100, 100)
-    pygame.draw.rect(tela, cor_fundo, rect, border_radius=8)
-    pygame.draw.rect(tela, cor_borda, rect, 2, border_radius=8)
+    pygame.draw.rect(superficie_jogo, cor_fundo, rect, border_radius=8)
+    pygame.draw.rect(superficie_jogo, cor_borda, rect, 2, border_radius=8)
     s = fonte_media.render(texto, True, cor_text if selecionado else (200,200,200))
     r = s.get_rect(center=rect.center)
-    tela.blit(s, r)
+    superficie_jogo.blit(s, r)
+
+def renderizar_na_tela_real():
+    # Estica a superfície virtual do jogo para o tamanho atual da janela e desenha na tela principal
+    tela_esticada = pygame.transform.scale(superficie_jogo, tela.get_size())
+    tela.blit(tela_esticada, (0, 0))
+    pygame.display.flip()
 
 #  MENU PRINCIPAL
 def menu_principal():
+    global tela
     tema_idx        = 0
     personagem_idx  = 0
     dificuldade_idx = 1
@@ -267,7 +277,8 @@ def menu_principal():
         tick += 1
         tema_nome = nomes_temas[tema_idx]
         tema      = TEMAS[tema_nome]
-        tela.fill(tema["fundo"])
+        
+        superficie_jogo.fill(tema["fundo"])
         desenhar_grade(tema)
         desenhar_paredes(tema)
 
@@ -277,14 +288,13 @@ def menu_principal():
         w = int(titulo_surf.get_width() * escala)
         h = int(titulo_surf.get_height() * escala)
         titulo_surf = pygame.transform.scale(titulo_surf, (w, h))
-        tela.blit(titulo_surf, titulo_surf.get_rect(center=(LARGURA//2, 70)))
+        superficie_jogo.blit(titulo_surf, titulo_surf.get_rect(center=(LARGURA//2, 70)))
 
         # subtítulo
         texto_centro("SUPREME EDITION", (200,200,200), 115, fonte_pequena)
 
         # ---- SEÇÃO: PERSONAGEM ----
         texto_centro("PERSONAGEM", tema["pontos"], 155, fonte_pequena)
-        lp = len(PERSONAGENS)
         for i, p in enumerate(PERSONAGENS):
             col = i % 2
             row = i // 2
@@ -322,16 +332,21 @@ def menu_principal():
             80
         )
         btn = pygame.Rect(LARGURA//2 - 110, 448, 220, 20)
-        pygame.draw.rect(tela, cor_btn, btn, border_radius=6)
+        pygame.draw.rect(superficie_jogo, cor_btn, btn, border_radius=6)
         s = fonte_media.render("▶  JOGAR  [ENTER]", True, (0,0,0))
-        tela.blit(s, s.get_rect(center=btn.center))
+        superficie_jogo.blit(s, s.get_rect(center=btn.center))
 
-        pygame.display.flip()
+        renderizar_na_tela_real() # Aplica a escala e mostra na janela real
         relogio.tick(60)
 
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
+            
+            # Atualiza o tamanho da janela se redimensionada
+            if ev.type == pygame.VIDEORESIZE:
+                tela = pygame.display.set_mode((ev.w, ev.h), pygame.RESIZABLE)
+
             if ev.type == pygame.KEYDOWN:
                 if ev.key in (pygame.K_RETURN, pygame.K_SPACE):
                     return (nomes_temas[tema_idx],
@@ -341,6 +356,13 @@ def menu_principal():
                     pygame.quit(); sys.exit()
             if ev.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = ev.pos
+                
+                # Ajustando o clique do mouse para a tela esticada
+                escala_x = LARGURA / tela.get_width()
+                escala_y = ALTURA / tela.get_height()
+                mx = int(mx * escala_x)
+                my = int(my * escala_y)
+
                 # personagem
                 for i, p in enumerate(PERSONAGENS):
                     col = i % 2; row = i // 2
@@ -382,7 +404,7 @@ def gerar_obstaculos(n, lista_cobra, comida_x, comida_y):
     return obs
 
 def loop_jogo(tema_nome, personagem, dificuldade_nome):
-    global recordes
+    global recordes, tela
     tema      = TEMAS[tema_nome]
     cfg       = DIFICULDADES[dificuldade_nome]
     velocidade= cfg["velocidade"]
@@ -395,6 +417,7 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
     y = AREA_Y1  + (AREA_ALTURA //2 // TAMANHO_BLOCO) * TAMANHO_BLOCO
 
     x_mudanca = 0; y_mudanca = 0; direcao = "direita"
+    ultima_direcao = "direita"
     lista_cobra = [[x, y]]
     comprimento = 1
 
@@ -412,7 +435,6 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
 
     particulas.clear()
     fim = False; morreu = False
-    flash = 0  # frames de flash na morte
 
     while not fim:
 
@@ -427,13 +449,14 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
 
             esperando = True
             while esperando:
-                tela.fill(tema["fundo"])
+                superficie_jogo.fill(tema["fundo"])
                 desenhar_grade(tema)
                 desenhar_paredes(tema)
+                
                 # sobreposição escura
                 overlay = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
                 overlay.fill((0,0,0,140))
-                tela.blit(overlay, (0,0))
+                superficie_jogo.blit(overlay, (0,0))
 
                 texto_centro("FIM DE JOGO ", (220,20,60), ALTURA//2-70, fonte_grande)
                 texto_centro(f"Pontuação: {pontuacao}", tema["pontos"], ALTURA//2-20, fonte_grande)
@@ -443,12 +466,15 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
                              (200,200,200), ALTURA//2+55, fonte_pequena)
                 texto_centro("[ C ] Continuar   [ M ] Menu   [ S ] Sair",
                              (255,255,255), ALTURA//2+90, fonte_pequena)
-                pygame.display.flip()
+                
+                renderizar_na_tela_real()
                 relogio.tick(30)
 
                 for ev in pygame.event.get():
                     if ev.type == pygame.QUIT:
                         pygame.quit(); sys.exit()
+                    if ev.type == pygame.VIDEORESIZE:
+                        tela = pygame.display.set_mode((ev.w, ev.h), pygame.RESIZABLE)
                     if ev.type == pygame.KEYDOWN:
                         if ev.key == pygame.K_c:
                             loop_jogo(tema_nome, personagem, dificuldade_nome)
@@ -458,7 +484,6 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
                         if ev.key == pygame.K_s:
                             pygame.quit(); sys.exit()
                     if ev.type == pygame.MOUSEBUTTONDOWN:
-                        mx,my = ev.pos
                         esperando = False; fim = True
             continue
 
@@ -466,30 +491,35 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
+            if ev.type == pygame.VIDEORESIZE:
+                tela = pygame.display.set_mode((ev.w, ev.h), pygame.RESIZABLE)
+            
             if ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_LEFT  and direcao != "direita":
+                if ev.key == pygame.K_LEFT  and ultima_direcao != "direita":
                     x_mudanca=-TAMANHO_BLOCO; y_mudanca=0; direcao="esquerda"
-                elif ev.key == pygame.K_RIGHT and direcao != "esquerda":
+                elif ev.key == pygame.K_RIGHT and ultima_direcao != "esquerda":
                     x_mudanca=TAMANHO_BLOCO;  y_mudanca=0; direcao="direita"
-                elif ev.key == pygame.K_UP    and direcao != "baixo":
+                elif ev.key == pygame.K_UP    and ultima_direcao != "baixo":
                     y_mudanca=-TAMANHO_BLOCO; x_mudanca=0; direcao="cima"
-                elif ev.key == pygame.K_DOWN  and direcao != "cima":
+                elif ev.key == pygame.K_DOWN  and ultima_direcao != "cima":
                     y_mudanca=TAMANHO_BLOCO;  x_mudanca=0; direcao="baixo"
                 elif ev.key == pygame.K_ESCAPE:
                     fim = True
                 # WASD
-                elif ev.key == pygame.K_a and direcao != "direita":
+                elif ev.key == pygame.K_a and ultima_direcao != "direita":
                     x_mudanca=-TAMANHO_BLOCO; y_mudanca=0; direcao="esquerda"
-                elif ev.key == pygame.K_d and direcao != "esquerda":
+                elif ev.key == pygame.K_d and ultima_direcao != "esquerda":
                     x_mudanca=TAMANHO_BLOCO;  y_mudanca=0; direcao="direita"
-                elif ev.key == pygame.K_w and direcao != "baixo":
+                elif ev.key == pygame.K_w and ultima_direcao != "baixo":
                     y_mudanca=-TAMANHO_BLOCO; x_mudanca=0; direcao="cima"
-                elif ev.key == pygame.K_s and direcao != "cima":
+                elif ev.key == pygame.K_s and ultima_direcao != "cima":
                     y_mudanca=TAMANHO_BLOCO;  x_mudanca=0; direcao="baixo"
 
         # MOVER
         x += x_mudanca
         y += y_mudanca
+        
+        ultima_direcao = direcao
 
         # COLISÃO PAREDE
         if x < AREA_X1 or x >= AREA_X2 or y < AREA_Y1 or y >= AREA_Y2:
@@ -513,21 +543,21 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
             morreu = True; continue
 
         # DESENHAR
-        tela.fill(tema["fundo"])
+        superficie_jogo.fill(tema["fundo"])
         desenhar_grade(tema)
         desenhar_paredes(tema)
         desenhar_obstaculos(obstaculos, tema)
-        tela.blit(img_comida, [comida_x, comida_y])
+        superficie_jogo.blit(img_comida, [comida_x, comida_y])
         atualizar_particulas()
         desenhar_cobra(lista_cobra, direcao, img_cabeca, tema)
 
         # pontuação e dificuldade no HUD
         pontos_txt = fonte_media.render(f"🍎 {comprimento-1}", True, tema["pontos"])
-        tela.blit(pontos_txt, (AREA_X1+5, AREA_Y1+4))
+        superficie_jogo.blit(pontos_txt, (AREA_X1+5, AREA_Y1+4))
         dif_txt = fonte_pequena.render(dificuldade_nome, True, (200,200,200))
-        tela.blit(dif_txt, (LARGURA - dif_txt.get_width() - AREA_X1 - 5, AREA_Y1+5))
+        superficie_jogo.blit(dif_txt, (LARGURA - dif_txt.get_width() - AREA_X1 - 5, AREA_Y1+5))
 
-        pygame.display.flip()
+        renderizar_na_tela_real()
 
         # COMER
         if x == comida_x and y == comida_y:
