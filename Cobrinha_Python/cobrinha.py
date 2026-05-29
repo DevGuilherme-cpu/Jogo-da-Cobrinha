@@ -199,6 +199,77 @@ def atualizar_particulas():
     for p in mortas:
         particulas.remove(p)
 
+#  ANIMAÇÕES CARTOON
+anim_morte = {"ativo": False, "timer": 0, "x": 0, "y": 0, "angulo_estrela": 0}
+anim_comer = {"ativo": False, "timer": 0, "x": 0, "y": 0, "escala": 1.0}
+
+DURACAO_ANIM_MORTE = 90   # frames da animação de morte
+DURACAO_ANIM_COMER = 40   # frames da animação de comer
+
+def desenhar_estrelas_tontas(x, y, angulo, num_estrelas=5):
+    """Desenha estrelinhas girando em volta da cabeça da cobra."""
+    raio = TAMANHO_BLOCO * 1.8
+    cx = x + TAMANHO_BLOCO // 2
+    cy = y + TAMANHO_BLOCO // 2
+    for i in range(num_estrelas):
+        a = math.radians(angulo + i * (360 / num_estrelas))
+        sx = int(cx + math.cos(a) * raio)
+        sy = int(cy + math.sin(a) * raio)
+        # desenha estrela de 5 pontas
+        for j in range(5):
+            a1 = math.radians(j * 72 - 90)
+            a2 = math.radians(j * 72 + 36 - 90)
+            p1 = (sx + int(math.cos(a1)*5), sy + int(math.sin(a1)*5))
+            p2 = (sx + int(math.cos(a2)*2), sy + int(math.sin(a2)*2))
+            p3 = (sx + int(math.cos(math.radians(j*72+72-90))*5),
+                  sy + int(math.sin(math.radians(j*72+72-90))*5))
+            pygame.draw.polygon(superficie_jogo, (255, 230, 0), [p1, p2, p3])
+        pygame.draw.circle(superficie_jogo, (255,200,0), (sx, sy), 2)
+
+def desenhar_olhos_tontos(x, y):
+    """Desenha olhos em espiral (tonto) na cabeça."""
+    cx = x + TAMANHO_BLOCO // 2
+    cy = y + TAMANHO_BLOCO // 2
+    for ox, oy in [(-4, -3), (4, -3)]:
+        ex, ey = cx + ox, cy + oy
+        pygame.draw.circle(superficie_jogo, (255, 255, 255), (ex, ey), 4)
+        pygame.draw.circle(superficie_jogo, (0, 0, 0), (ex, ey), 4, 1)
+        pygame.draw.circle(superficie_jogo, (0, 0, 0), (ex + 1, ey), 2, 1)
+        pygame.draw.circle(superficie_jogo, (0, 0, 0), (ex - 1, ey), 2, 1)
+
+def desenhar_anim_comer(x, y, timer):
+    """Animação de comer: texto flutuante + brilho."""
+    progresso = timer / DURACAO_ANIM_COMER
+    alpha = int(255 * min(1.0, progresso * 4) * max(0, 1 - (progresso - 0.5) * 2))
+    fy = y - int(30 * (1 - progresso))  # sobe com o tempo
+    escala = 1.0 + 0.5 * math.sin(progresso * math.pi)
+
+    # Texto "NOM NOM!" flutuante
+    textos = ["NOM!", "😋", "+1"]
+    txt_str = textos[min(int(timer / 15), 2)]
+    txt_surf = fonte_media.render(txt_str, True, (255, 220, 50))
+    w = int(txt_surf.get_width() * escala)
+    h = int(txt_surf.get_height() * escala)
+    if w > 0 and h > 0:
+        txt_surf = pygame.transform.scale(txt_surf, (w, h))
+        txt_surf.set_alpha(max(0, alpha))
+        cx = x + TAMANHO_BLOCO // 2
+        superficie_jogo.blit(txt_surf, txt_surf.get_rect(center=(cx, fy)))
+
+    # Brilho em volta da comida
+    num_raios = 8
+    for i in range(num_raios):
+        a = math.radians(i * (360 / num_raios) + timer * 8)
+        r1 = TAMANHO_BLOCO
+        r2 = TAMANHO_BLOCO + int(8 * escala)
+        cx2 = x + TAMANHO_BLOCO // 2
+        cy2 = y + TAMANHO_BLOCO // 2
+        px1 = int(cx2 + math.cos(a) * r1)
+        py1 = int(cy2 + math.sin(a) * r1)
+        px2 = int(cx2 + math.cos(a) * r2)
+        py2 = int(cy2 + math.sin(a) * r2)
+        pygame.draw.line(superficie_jogo, (255, 220, 50), (px1, py1), (px2, py2), 2)
+
 #  RECORDES (em memória)
 recordes = {d: 0 for d in DIFICULDADES}
 
@@ -434,6 +505,7 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
     obstaculos = gerar_obstaculos(n_obs, lista_cobra, comida_x, comida_y)
 
     particulas.clear()
+    anim_comer["ativo"] = False; anim_comer["timer"] = 0
     fim = False; morreu = False
 
     while not fim:
@@ -522,14 +594,11 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
         ultima_direcao = direcao
 
         # COLISÃO PAREDE
+        bateu = False
         if x < AREA_X1 or x >= AREA_X2 or y < AREA_Y1 or y >= AREA_Y2:
-            tocar(SOM_MORTE)
-            morreu = True; continue
-
-        # COLISÃO OBSTÁCULO
-        if (x,y) in obstaculos:
-            tocar(SOM_MORTE)
-            morreu = True; continue
+            x = max(AREA_X1, min(x, AREA_X2 - TAMANHO_BLOCO))
+            y = max(AREA_Y1, min(y, AREA_Y2 - TAMANHO_BLOCO))
+            bateu = True
 
         # CORPO
         cabeca = [x, y]
@@ -537,12 +606,63 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
         if len(lista_cobra) > comprimento:
             del lista_cobra[0]
 
+        # COLISÃO OBSTÁCULO
+        if (x, y) in obstaculos:
+            bateu = True
+
         # COLISÃO PRÓPRIO CORPO
         if cabeca in lista_cobra[:-1]:
-            tocar(SOM_MORTE)
-            morreu = True; continue
+            bateu = True
 
-        # DESENHAR
+        # SUB-LOOP DA ANIMAÇÃO DE MORTE (trava tudo e roda a animação completa)
+        if bateu:
+            tocar(SOM_MORTE)
+            angulo_estrela = 0
+            for t in range(1, DURACAO_ANIM_MORTE + 1):
+                # Consome eventos sem processar movimento (só QUIT e RESIZE)
+                for ev in pygame.event.get():
+                    if ev.type == pygame.QUIT:
+                        pygame.quit(); sys.exit()
+                    if ev.type == pygame.VIDEORESIZE:
+                        tela = pygame.display.set_mode((ev.w, ev.h), pygame.RESIZABLE)
+
+                angulo_estrela += 8
+                tremor_x = x + int(math.sin(t * 1.5) * 5)
+                tremor_y = y + int(math.cos(t * 2.1) * 4)
+
+                # Desenha o cenário parado
+                superficie_jogo.fill(tema["fundo"])
+                desenhar_grade(tema)
+                desenhar_paredes(tema)
+                desenhar_obstaculos(obstaculos, tema)
+                superficie_jogo.blit(img_comida, [comida_x, comida_y])
+                desenhar_cobra(lista_cobra, direcao, img_cabeca, tema)
+
+                # Cabeça tremendo
+                angulos = {"direita":0, "esquerda":180, "cima":270, "baixo":90}
+                img_rot = pygame.transform.rotate(img_cabeca, angulos.get(direcao, 0))
+                superficie_jogo.blit(img_rot, [tremor_x, tremor_y])
+                desenhar_olhos_tontos(tremor_x, tremor_y)
+                desenhar_estrelas_tontas(tremor_x, tremor_y, angulo_estrela)
+
+                # Texto "AU!!" aparece nos primeiros frames
+                if t < 30:
+                    txt = fonte_media.render("AU!!", True, (255, 80, 80))
+                    superficie_jogo.blit(txt, txt.get_rect(center=(tremor_x + TAMANHO_BLOCO//2, tremor_y - 22)))
+
+                # HUD
+                pontos_txt = fonte_media.render(f"🍎 {comprimento-1}", True, tema["pontos"])
+                superficie_jogo.blit(pontos_txt, (AREA_X1+5, AREA_Y1+4))
+                dif_txt = fonte_pequena.render(dificuldade_nome, True, (200,200,200))
+                superficie_jogo.blit(dif_txt, (LARGURA - dif_txt.get_width() - AREA_X1 - 5, AREA_Y1+5))
+
+                renderizar_na_tela_real()
+                relogio.tick(60)
+
+            morreu = True
+            continue
+
+        # DESENHAR (jogo normal)
         superficie_jogo.fill(tema["fundo"])
         desenhar_grade(tema)
         desenhar_paredes(tema)
@@ -550,6 +670,13 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
         superficie_jogo.blit(img_comida, [comida_x, comida_y])
         atualizar_particulas()
         desenhar_cobra(lista_cobra, direcao, img_cabeca, tema)
+
+        # ANIMAÇÃO DE COMER
+        if anim_comer["ativo"]:
+            anim_comer["timer"] += 1
+            desenhar_anim_comer(anim_comer["x"], anim_comer["y"], anim_comer["timer"])
+            if anim_comer["timer"] >= DURACAO_ANIM_COMER:
+                anim_comer["ativo"] = False
 
         # pontuação e dificuldade no HUD
         pontos_txt = fonte_media.render(f"🍎 {comprimento-1}", True, tema["pontos"])
@@ -563,6 +690,10 @@ def loop_jogo(tema_nome, personagem, dificuldade_nome):
         if x == comida_x and y == comida_y:
             tocar(SOM_COMER)
             adicionar_particulas(comida_x, comida_y, (255,80,80))
+            anim_comer["ativo"] = True
+            anim_comer["timer"] = 0
+            anim_comer["x"] = comida_x
+            anim_comer["y"] = comida_y
             comprimento += 1
             comida_x, comida_y = nova_comida()
             if dificuldade_nome != "Fácil" and (comprimento-1) % 5 == 0 and comprimento > 1:
